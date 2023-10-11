@@ -1,4 +1,5 @@
 # sketchybar-rs
+[![ci](https://github.com/johnallen3d/sketchybar-rs/actions/workflows/ci.yml/badge.svg)](https://github.com/johnallen3d/sketchybar-rs/actions/workflows/ci.yml)
 
 Send messages to [SketchyBar](https://github.com/FelixKratz/SketchyBar) from Rust! This library crate embeds the [SketchyBarHelper](https://github.com/FelixKratz/SketchyBarHelper) `sketchybar.h`.
 
