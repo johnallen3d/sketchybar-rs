@@ -29,7 +29,7 @@ impl Error for SketchybarError {}
 
 #[link(name = "sketchybar", kind = "static")]
 extern "C" {
-    fn sketchybar(message: *mut i8) -> *mut i8;
+    fn sketchybar(message: *mut i8, bar_name: *mut i8) -> *mut i8;
 }
 
 /// Sends a message to `SketchyBar` and returns the response.
@@ -38,6 +38,10 @@ extern "C" {
 ///
 /// * `message` - A string slice containing the message to be sent to
 /// `SketchyBar`.
+/// * `bar_name` - An optional string slice containing the name of the process
+/// of the target bar. This defaults to `sketchybar` however, if you're using a
+/// secondary bar (eg. a `bottombar`) you can override the default there to pass
+/// a message to this other bar.
 ///
 /// # Returns
 ///
@@ -68,12 +72,18 @@ extern "C" {
 ///     println!("Response from SketchyBar: {}", response);
 /// }
 /// ```
-pub fn message(message: &str) -> Result<String, SketchybarError> {
+pub fn message(
+    message: &str,
+    bar_name: Option<&str>,
+) -> Result<String, SketchybarError> {
     let command = CString::new(message)
         .map_err(|_| SketchybarError::MessageConversionError)?;
 
+    let bar_name = CString::new(bar_name.unwrap_or("sketchybar"))
+        .map_err(|_| SketchybarError::MessageConversionError)?;
+
     let result = unsafe {
-        CStr::from_ptr(sketchybar(command.into_raw()))
+        CStr::from_ptr(sketchybar(command.into_raw(), bar_name.into_raw()))
             .to_string_lossy()
             .into_owned()
     };
