@@ -50,7 +50,7 @@ char* env_get_value_for_key(env env, char* key) {
   return (char*)"";
 }
 
-mach_port_t mach_get_bs_port() {
+mach_port_t mach_get_bs_port(char* bar_name) {
   mach_port_name_t task = mach_task_self();
 
   mach_port_t bs_port;
@@ -60,9 +60,12 @@ mach_port_t mach_get_bs_port() {
     return 0;
   }
 
+  char service_name[256]; // Assuming the service name will not exceed 255 chars
+  snprintf(service_name, sizeof(service_name), "git.felix.%s", bar_name);
+
   mach_port_t port;
   if (bootstrap_look_up(bs_port,
-                        "git.felix.sketchybar",
+                        service_name,
                         &port                  ) != KERN_SUCCESS) {
     return 0;
   }
@@ -190,7 +193,7 @@ bool mach_server_begin(struct mach_server* mach_server, mach_handler handler, ch
 }
 #pragma clang diagnostic pop
 
-char* sketchybar(char* message) {
+char* sketchybar(char* message, char* bar_name) {
   uint32_t message_length = strlen(message) + 1;
   char formatted_message[message_length + 1];
 
@@ -213,7 +216,7 @@ char* sketchybar(char* message) {
   }
 
   formatted_message[caret] = '\0';
-  if (!g_mach_port) g_mach_port = mach_get_bs_port();
+  if (!g_mach_port) g_mach_port = mach_get_bs_port(bar_name);
   char* response = mach_send_message(g_mach_port,
                                      formatted_message,
                                      caret + 1          );
