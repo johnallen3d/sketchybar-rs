@@ -8,7 +8,7 @@ Send messages to [SketchyBar](https://github.com/FelixKratz/SketchyBar) from Rus
 Add this to your `Cargo.toml`:
 ```toml
 [dependencies]
-sketchybar = "0.1"
+sketchybar = "0.2"
 ```
 
 Then call the `message` function:
@@ -17,17 +17,17 @@ Then call the `message` function:
 extern crate sketchybar_rs;
 
 fn main() {
-    let _ = sketchybar_rs::message("--query bar");
+    let _ = sketchybar_rs::message("--query bar", None);
 }
 ```
 
-More practically, update one of your widgets:
+More practically, update a widget on a secondary bar named `bottombar`:
 
 ```rust
 extern crate sketchybar_rs;
 
 fn main() {
-    let _ = sketchybar_rs::message("--set weather label=42°F");
+    let _ = sketchybar_rs::message("--set weather label=42°F", Some("bottombar"));
 }
 ```
 
