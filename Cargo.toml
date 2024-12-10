@@ -15,4 +15,4 @@ license = "MIT"
 libc = "0.2.168"
 
 [build-dependencies]
-cc = "1.0.106"
+cc = "1.2.3"
