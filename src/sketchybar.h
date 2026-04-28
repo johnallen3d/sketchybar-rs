@@ -4,6 +4,7 @@
 #include <mach/message.h>
 #include <bootstrap.h>
 #include <stdlib.h>
+#include <string.h>
 #include <pthread.h>
 #include <stdio.h>
 
@@ -60,7 +61,7 @@ mach_port_t mach_get_bs_port(char* bar_name) {
     return 0;
   }
 
-  char service_name[256]; // Assuming the service name will not exceed 255 chars
+  char service_name[256];
   snprintf(service_name, sizeof(service_name), "git.felix.%s", bar_name);
 
   mach_port_t port;
@@ -98,13 +99,15 @@ void mach_receive_message(mach_port_t port, struct mach_buffer* buffer, bool tim
   }
 }
 
+// Caller must free() the returned string. Returns NULL on failure or empty
+// response. Fixes upstream leaks: response_port and OOL response buffer.
 char* mach_send_message(mach_port_t port, char* message, uint32_t len) {
   if (!message || !port) {
     return NULL;
   }
 
-  mach_port_t response_port;
   mach_port_name_t task = mach_task_self();
+  mach_port_t response_port;
   if (mach_port_allocate(task, MACH_PORT_RIGHT_RECEIVE,
                                &response_port          ) != KERN_SUCCESS) {
     return NULL;
@@ -112,7 +115,8 @@ char* mach_send_message(mach_port_t port, char* message, uint32_t len) {
 
   if (mach_port_insert_right(task, response_port,
                                    response_port,
-                                   MACH_MSG_TYPE_MAKE_SEND)!= KERN_SUCCESS) {
+                                   MACH_MSG_TYPE_MAKE_SEND) != KERN_SUCCESS) {
+    mach_port_mod_refs(task, response_port, MACH_PORT_RIGHT_RECEIVE, -1);
     return NULL;
   }
 
@@ -143,11 +147,26 @@ char* mach_send_message(mach_port_t port, char* message, uint32_t len) {
 
   struct mach_buffer buffer = { 0 };
   mach_receive_message(response_port, &buffer, true);
-  if (buffer.message.descriptor.address)
-    return (char*)buffer.message.descriptor.address;
+
+  // Copy the OOL response into a heap buffer the caller owns, then destroy
+  // the mach message (which vm_deallocates the OOL region).
+  char* result = NULL;
+  if (buffer.message.descriptor.address
+      && buffer.message.descriptor.size > 0) {
+    size_t sz = buffer.message.descriptor.size;
+    result = (char*)malloc(sz + 1);
+    if (result) {
+      memcpy(result, buffer.message.descriptor.address, sz);
+      result[sz] = '\0';
+    }
+  }
   mach_msg_destroy(&buffer.message.header);
 
-  return NULL;
+  // Drop both rights on response_port so the kernel reclaims it.
+  mach_port_mod_refs(task, response_port, MACH_PORT_RIGHT_SEND, -1);
+  mach_port_mod_refs(task, response_port, MACH_PORT_RIGHT_RECEIVE, -1);
+
+  return result;
 }
 
 #pragma clang diagnostic push
@@ -217,12 +236,7 @@ char* sketchybar(char* message, char* bar_name) {
 
   formatted_message[caret] = '\0';
   if (!g_mach_port) g_mach_port = mach_get_bs_port(bar_name);
-  char* response = mach_send_message(g_mach_port,
-                                     formatted_message,
-                                     caret + 1          );
-
-  if (response) return response;
-  else return (char*)"";
+  return mach_send_message(g_mach_port, formatted_message, caret + 1);
 }
 
 void event_server_begin(mach_handler event_handler, char* bootstrap_name) {
