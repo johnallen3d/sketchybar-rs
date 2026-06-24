@@ -4,6 +4,7 @@ use std::{
     error::Error,
     ffi::{CStr, CString},
     fmt,
+    os::raw::c_char,
 };
 
 #[derive(Debug)]
@@ -29,7 +30,7 @@ impl Error for SketchybarError {}
 
 #[link(name = "sketchybar", kind = "static")]
 extern "C" {
-    fn sketchybar(message: *mut i8, bar_name: *mut i8) -> *mut i8;
+    fn sketchybar(message: *mut c_char, bar_name: *mut c_char) -> *mut c_char;
 }
 
 /// Sends a message to `SketchyBar` and returns the response.
@@ -61,6 +62,13 @@ extern "C" {
 /// This function contains unsafe code that calls into a C library (sketchybar).
 /// Ensure the C library is correctly implemented to avoid undefined behavior.
 ///
+/// # Memory ownership
+///
+/// The C side returns a `malloc`'d buffer (or `NULL`). After copying it into
+/// a Rust `String`, this function `libc::free`s the original to avoid leaking
+/// the response buffer on every call. A `NULL` response is mapped to an empty
+/// string for backwards compatibility.
+///
 /// # Examples
 ///
 /// ```no-run
@@ -82,10 +90,26 @@ pub fn message(
     let bar_name = CString::new(bar_name.unwrap_or("sketchybar"))
         .map_err(|_| SketchybarError::MessageConversionError)?;
 
-    let result = unsafe {
-        CStr::from_ptr(sketchybar(command.into_raw(), bar_name.into_raw()))
+    let raw_cmd = command.into_raw();
+    let raw_bar = bar_name.into_raw();
+
+    let response_ptr = unsafe { sketchybar(raw_cmd, raw_bar) };
+
+    // Reclaim the CStrings we handed to C via into_raw().
+    unsafe {
+        let _ = CString::from_raw(raw_cmd);
+        let _ = CString::from_raw(raw_bar);
+    }
+
+    let result = if response_ptr.is_null() {
+        String::new()
+    } else {
+        let s = unsafe { CStr::from_ptr(response_ptr) }
             .to_string_lossy()
-            .into_owned()
+            .into_owned();
+        // Free the malloc'd buffer the C side handed us.
+        unsafe { libc::free(response_ptr.cast::<libc::c_void>()) };
+        s
     };
 
     Ok(result)
