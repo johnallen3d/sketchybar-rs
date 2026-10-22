@@ -1,6 +1,6 @@
 [package]
 name = "sketchybar-rs"
-version = "0.2.0"
+version = "0.2.1"
 edition = "2021"
 authors = ["John Allen <johnallen3d@threedogconsulting.com>"]
 repository = "https://github.com/johnallen3d/sketchybar-rs"
